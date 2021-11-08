@@ -24,8 +24,11 @@ func goType(r *compiler.Result, col *compiler.Column, settings config.CombinedSe
 }
 
 func goInnerType(r *compiler.Result, col *compiler.Column, settings config.CombinedSettings) string {
+	if col.IsArray {
+		col.NotNull = false
+	}
 	columnType := col.DataType
-	notNull := col.NotNull || col.IsArray
+	notNull := col.NotNull
 
 	// package overrides have a higher precedence
 	for _, oride := range settings.Overrides {

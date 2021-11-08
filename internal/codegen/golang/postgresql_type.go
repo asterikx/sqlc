@@ -10,8 +10,11 @@ import (
 )
 
 func postgresType(r *compiler.Result, col *compiler.Column, settings config.CombinedSettings) string {
+	if col.IsArray {
+		col.NotNull = false
+	}
 	columnType := col.DataType
-	notNull := col.NotNull || col.IsArray
+	notNull := col.NotNull
 	driver := parseDriver(settings)
 
 	switch columnType {
