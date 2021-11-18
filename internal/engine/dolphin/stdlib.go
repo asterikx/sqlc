@@ -1,8 +1,8 @@
 package dolphin
 
 import (
-	"github.com/kyleconroy/sqlc/internal/sql/ast"
-	"github.com/kyleconroy/sqlc/internal/sql/catalog"
+	"github.com/asterikx/sqlc/internal/sql/ast"
+	"github.com/asterikx/sqlc/internal/sql/catalog"
 )
 
 func defaultSchema(name string) *catalog.Schema {

@@ -1,3 +1,4 @@
+//go:build !windows
 // +build !windows
 
 package postgresql
@@ -7,7 +8,7 @@ import (
 
 	pg "github.com/pganalyze/pg_query_go/v2"
 
-	"github.com/kyleconroy/sqlc/internal/sql/ast"
+	"github.com/asterikx/sqlc/internal/sql/ast"
 )
 
 func convertFuncParamMode(m pg.FunctionParameterMode) (ast.FuncParamMode, error) {
@@ -2780,10 +2781,10 @@ func convertVacuumStmt(n *pg.VacuumStmt) *ast.VacuumStmt {
 		return nil
 	}
 	return &ast.VacuumStmt{
-	// FIXME: The VacuumStmt node has changed quite a bit
-	// Options:  n.Options
-	// Relation: convertRangeVar(n.Relation),
-	// VaCols:   convertSlice(n.VaCols),
+		// FIXME: The VacuumStmt node has changed quite a bit
+		// Options:  n.Options
+		// Relation: convertRangeVar(n.Relation),
+		// VaCols:   convertSlice(n.VaCols),
 	}
 }
 

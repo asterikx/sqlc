@@ -3,8 +3,8 @@ package compiler
 import (
 	"fmt"
 
-	"github.com/kyleconroy/sqlc/internal/sql/ast"
-	"github.com/kyleconroy/sqlc/internal/sql/astutils"
+	"github.com/asterikx/sqlc/internal/sql/ast"
+	"github.com/asterikx/sqlc/internal/sql/astutils"
 )
 
 func findParameters(root ast.Node) ([]paramRef, error) {

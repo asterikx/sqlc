@@ -1,3 +1,4 @@
+//go:build examples
 // +build examples
 
 package ondeck
@@ -6,7 +7,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/kyleconroy/sqlc/internal/sqltest"
+	"github.com/asterikx/sqlc/internal/sqltest"
 
 	"github.com/google/go-cmp/cmp"
 )

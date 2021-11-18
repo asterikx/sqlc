@@ -8,9 +8,9 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/kyleconroy/sqlc/internal/codegen"
-	"github.com/kyleconroy/sqlc/internal/compiler"
-	"github.com/kyleconroy/sqlc/internal/config"
+	"github.com/asterikx/sqlc/internal/codegen"
+	"github.com/asterikx/sqlc/internal/compiler"
+	"github.com/asterikx/sqlc/internal/config"
 )
 
 type Generateable interface {

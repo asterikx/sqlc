@@ -1,8 +1,8 @@
 package named
 
 import (
-	"github.com/kyleconroy/sqlc/internal/sql/ast"
-	"github.com/kyleconroy/sqlc/internal/sql/astutils"
+	"github.com/asterikx/sqlc/internal/sql/ast"
+	"github.com/asterikx/sqlc/internal/sql/astutils"
 )
 
 func IsParamFunc(node ast.Node) bool {

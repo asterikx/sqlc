@@ -5,12 +5,12 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/kyleconroy/sqlc/internal/codegen"
-	"github.com/kyleconroy/sqlc/internal/compiler"
-	"github.com/kyleconroy/sqlc/internal/config"
-	"github.com/kyleconroy/sqlc/internal/core"
-	"github.com/kyleconroy/sqlc/internal/inflection"
-	"github.com/kyleconroy/sqlc/internal/sql/catalog"
+	"github.com/asterikx/sqlc/internal/codegen"
+	"github.com/asterikx/sqlc/internal/compiler"
+	"github.com/asterikx/sqlc/internal/config"
+	"github.com/asterikx/sqlc/internal/core"
+	"github.com/asterikx/sqlc/internal/inflection"
+	"github.com/asterikx/sqlc/internal/sql/catalog"
 )
 
 func buildEnums(r *compiler.Result, settings config.CombinedSettings) []Enum {
@@ -179,10 +179,10 @@ func buildQueries(r *compiler.Result, settings config.CombinedSettings, structs 
 				})
 			}
 			gq.Arg = QueryValue{
-				Emit:       true,
-				Name:       "arg",
-				Struct:     columnsToStruct(r, gq.MethodName+"Params", cols, settings, false),
-				SQLPackage: sqlpkg,
+				Emit:        true,
+				Name:        "arg",
+				Struct:      columnsToStruct(r, gq.MethodName+"Params", cols, settings, false),
+				SQLPackage:  sqlpkg,
 				EmitPointer: settings.Go.EmitParamsStructPointers,
 			}
 		}
