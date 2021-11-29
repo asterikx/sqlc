@@ -64,6 +64,20 @@ func outputColumns(qc *QueryCatalog, node ast.Node) ([]*Column, error) {
 		targets = n.ReturningList
 	case *ast.SelectStmt:
 		targets = n.TargetList
+
+		if n.GroupClause != nil {
+			for _, item := range n.GroupClause.Items {
+				ref, ok := item.(*ast.ColumnRef)
+				if !ok {
+					continue
+				}
+
+				if err := findColumnForRef(ref, tables); err != nil {
+					return nil, err
+				}
+			}
+		}
+
 		// For UNION queries, targets is empty and we need to look for the
 		// columns in Largs.
 		if len(targets.Items) == 0 && n.Larg != nil {
@@ -196,7 +210,7 @@ func outputColumns(qc *QueryCatalog, node ast.Node) ([]*Column, error) {
 			}
 			fun, err := qc.catalog.ResolveFuncCall(n)
 			if err == nil {
-				cols = append(cols, &Column{Name: name, DataType: dataType(fun.ReturnType), NotNull: true})
+				cols = append(cols, &Column{Name: name, DataType: dataType(fun.ReturnType), NotNull: !fun.ReturnTypeNullable})
 			} else {
 				cols = append(cols, &Column{Name: name, DataType: "any"})
 			}
@@ -349,7 +363,7 @@ func sourceTables(qc *QueryCatalog, node ast.Node) ([]*Table, error) {
 		})
 	case *ast.UpdateStmt:
 		list = &ast.List{
-			Items: append(n.FromClause.Items, n.Relation),
+			Items: append(n.FromClause.Items, n.Relations.Items...),
 		}
 	default:
 		return nil, fmt.Errorf("sourceTables: unsupported node type: %T", n)
@@ -469,4 +483,44 @@ func outputColumnRefs(res *ast.ResTarget, tables []*Table, node *ast.ColumnRef) 
 		}
 	}
 	return cols, nil
+}
+
+func findColumnForRef(ref *ast.ColumnRef, tables []*Table) error {
+	parts := stringSlice(ref.Fields)
+	var alias, name string
+	if len(parts) == 1 {
+		name = parts[0]
+	} else if len(parts) == 2 {
+		alias = parts[0]
+		name = parts[1]
+	}
+
+	var found int
+	for _, t := range tables {
+		if alias != "" && t.Rel.Name != alias {
+			continue
+		}
+		for _, c := range t.Columns {
+			if c.Name == name {
+				found++
+			}
+		}
+	}
+
+	if found == 0 {
+		return &sqlerr.Error{
+			Code:     "42703",
+			Message:  fmt.Sprintf("column reference \"%s\" not found", name),
+			Location: ref.Location,
+		}
+	}
+	if found > 1 {
+		return &sqlerr.Error{
+			Code:     "42703",
+			Message:  fmt.Sprintf("column reference \"%s\" is ambiguous", name),
+			Location: ref.Location,
+		}
+	}
+
+	return nil
 }
