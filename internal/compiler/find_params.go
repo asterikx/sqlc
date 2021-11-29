@@ -107,6 +107,26 @@ func (p paramSearch) Visit(node ast.Node) astutils.Visitor {
 			}
 		}
 
+	case *ast.UpdateStmt:
+		for _, item := range n.TargetList.Items {
+			target, ok := item.(*ast.ResTarget)
+			if !ok {
+				continue
+			}
+			ref, ok := target.Val.(*ast.ParamRef)
+			if !ok {
+				continue
+			}
+			for _, relation := range n.Relations.Items {
+				rv, ok := relation.(*ast.RangeVar)
+				if !ok {
+					continue
+				}
+				*p.refs = append(*p.refs, paramRef{parent: target, ref: ref, rv: rv})
+			}
+			p.seen[ref.Location] = struct{}{}
+		}
+
 	case *ast.RangeVar:
 		p.rangeVar = n
 

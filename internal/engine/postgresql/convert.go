@@ -2766,8 +2766,11 @@ func convertUpdateStmt(n *pg.UpdateStmt) *ast.UpdateStmt {
 	if n == nil {
 		return nil
 	}
+
 	return &ast.UpdateStmt{
-		Relation:      convertRangeVar(n.Relation),
+		Relations: &ast.List{
+			Items: []ast.Node{convertRangeVar(n.Relation)},
+		},
 		TargetList:    convertSlice(n.TargetList),
 		WhereClause:   convertNode(n.WhereClause),
 		FromClause:    convertSlice(n.FromClause),
