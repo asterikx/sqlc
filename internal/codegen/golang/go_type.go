@@ -1,8 +1,8 @@
 package golang
 
 import (
-	"github.com/kyleconroy/sqlc/internal/compiler"
-	"github.com/kyleconroy/sqlc/internal/config"
+	"github.com/asterikx/sqlc/internal/compiler"
+	"github.com/asterikx/sqlc/internal/config"
 )
 
 func goType(r *compiler.Result, col *compiler.Column, settings config.CombinedSettings) string {
@@ -24,8 +24,11 @@ func goType(r *compiler.Result, col *compiler.Column, settings config.CombinedSe
 }
 
 func goInnerType(r *compiler.Result, col *compiler.Column, settings config.CombinedSettings) string {
+	if col.IsArray {
+		col.NotNull = false
+	}
 	columnType := col.DataType
-	notNull := col.NotNull || col.IsArray
+	notNull := col.NotNull
 
 	// package overrides have a higher precedence
 	for _, oride := range settings.Overrides {

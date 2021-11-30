@@ -5,12 +5,12 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/kyleconroy/sqlc/internal/codegen"
-	"github.com/kyleconroy/sqlc/internal/compiler"
-	"github.com/kyleconroy/sqlc/internal/config"
-	"github.com/kyleconroy/sqlc/internal/core"
-	"github.com/kyleconroy/sqlc/internal/inflection"
-	"github.com/kyleconroy/sqlc/internal/sql/catalog"
+	"github.com/asterikx/sqlc/internal/codegen"
+	"github.com/asterikx/sqlc/internal/compiler"
+	"github.com/asterikx/sqlc/internal/config"
+	"github.com/asterikx/sqlc/internal/core"
+	"github.com/asterikx/sqlc/internal/inflection"
+	"github.com/asterikx/sqlc/internal/sql/catalog"
 )
 
 func buildEnums(r *compiler.Result, settings config.CombinedSettings) []Enum {
