@@ -1,3 +1,4 @@
+//go:build examples
 // +build examples
 
 package booktest
@@ -7,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kyleconroy/sqlc/internal/sqltest"
+	"github.com/asterikx/sqlc/internal/sqltest"
 )
 
 func TestBooks(t *testing.T) {

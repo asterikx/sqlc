@@ -1,9 +1,9 @@
 package python
 
 import (
-	"github.com/kyleconroy/sqlc/internal/compiler"
-	"github.com/kyleconroy/sqlc/internal/config"
-	"github.com/kyleconroy/sqlc/internal/sql/catalog"
+	"github.com/asterikx/sqlc/internal/compiler"
+	"github.com/asterikx/sqlc/internal/config"
+	"github.com/asterikx/sqlc/internal/sql/catalog"
 	"log"
 )
 

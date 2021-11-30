@@ -1,6 +1,6 @@
 package postgresql
 
-import "github.com/kyleconroy/sqlc/internal/sql/catalog"
+import "github.com/asterikx/sqlc/internal/sql/catalog"
 
 func NewCatalog() *catalog.Catalog {
 	c := catalog.New("public")

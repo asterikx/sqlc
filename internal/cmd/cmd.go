@@ -13,9 +13,9 @@ import (
 	"github.com/spf13/pflag"
 	yaml "gopkg.in/yaml.v3"
 
-	"github.com/kyleconroy/sqlc/internal/config"
-	"github.com/kyleconroy/sqlc/internal/debug"
-	"github.com/kyleconroy/sqlc/internal/tracer"
+	"github.com/asterikx/sqlc/internal/config"
+	"github.com/asterikx/sqlc/internal/debug"
+	"github.com/asterikx/sqlc/internal/tracer"
 )
 
 // Do runs the command logic.

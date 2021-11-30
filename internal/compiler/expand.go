@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/kyleconroy/sqlc/internal/config"
-	"github.com/kyleconroy/sqlc/internal/source"
-	"github.com/kyleconroy/sqlc/internal/sql/ast"
-	"github.com/kyleconroy/sqlc/internal/sql/astutils"
+	"github.com/asterikx/sqlc/internal/config"
+	"github.com/asterikx/sqlc/internal/source"
+	"github.com/asterikx/sqlc/internal/sql/ast"
+	"github.com/asterikx/sqlc/internal/sql/astutils"
 )
 
 func (c *Compiler) expand(qc *QueryCatalog, raw *ast.RawStmt) ([]source.Edit, error) {

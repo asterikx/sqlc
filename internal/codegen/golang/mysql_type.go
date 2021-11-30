@@ -3,10 +3,10 @@ package golang
 import (
 	"log"
 
-	"github.com/kyleconroy/sqlc/internal/compiler"
-	"github.com/kyleconroy/sqlc/internal/config"
-	"github.com/kyleconroy/sqlc/internal/debug"
-	"github.com/kyleconroy/sqlc/internal/sql/catalog"
+	"github.com/asterikx/sqlc/internal/compiler"
+	"github.com/asterikx/sqlc/internal/config"
+	"github.com/asterikx/sqlc/internal/debug"
+	"github.com/asterikx/sqlc/internal/sql/catalog"
 )
 
 func mysqlType(r *compiler.Result, col *compiler.Column, settings config.CombinedSettings) string {
