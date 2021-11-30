@@ -159,7 +159,7 @@ func buildImports(settings config.CombinedSettings, queries []Query, uses func(s
 	pkg := make(map[ImportSpec]struct{})
 	std := make(map[string]struct{})
 
-	if uses("sql.Null") {
+	if uses("sql.Null") || uses("[]sql.Null") {
 		std["database/sql"] = struct{}{}
 	}
 
