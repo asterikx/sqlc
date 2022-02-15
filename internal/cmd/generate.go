@@ -19,6 +19,7 @@ import (
 	"github.com/asterikx/sqlc/internal/debug"
 	"github.com/asterikx/sqlc/internal/multierr"
 	"github.com/asterikx/sqlc/internal/opts"
+	"github.com/asterikx/sqlc/internal/plugin"
 )
 
 const errMessageNoVersion = `The configuration file must have a version number.
@@ -63,7 +64,7 @@ func Generate(ctx context.Context, e Env, dir, filename string, stderr io.Writer
 		}
 
 		if yamlMissing && jsonMissing {
-			fmt.Fprintln(stderr, "error parsing sqlc.json: file does not exist")
+			fmt.Fprintln(stderr, "error parsing configuration files. sqlc.yaml or sqlc.json: file does not exist")
 			return nil, errors.New("config file missing")
 		}
 
@@ -187,6 +188,7 @@ func Generate(ctx context.Context, e Env, dir, filename string, stderr io.Writer
 			region = trace.StartRegion(ctx, "codegen")
 		}
 		var files map[string]string
+		var resp *plugin.CodeGenResponse
 		var out string
 		switch {
 		case sql.Gen.Go != nil:
@@ -194,15 +196,22 @@ func Generate(ctx context.Context, e Env, dir, filename string, stderr io.Writer
 			files, err = golang.Generate(result, combo)
 		case sql.Gen.Kotlin != nil:
 			out = combo.Kotlin.Out
-			files, err = kotlin.Generate(result, combo)
+			resp, err = kotlin.Generate(codeGenRequest(result, combo))
 		case sql.Gen.Python != nil:
 			out = combo.Python.Out
-			files, err = python.Generate(result, combo)
+			resp, err = python.Generate(codeGenRequest(result, combo))
 		default:
 			panic("missing language backend")
 		}
 		if region != nil {
 			region.End()
+		}
+
+		if resp != nil {
+			files = map[string]string{}
+			for _, file := range resp.Files {
+				files[file.Name] = string(file.Contents)
+			}
 		}
 
 		if err != nil {
