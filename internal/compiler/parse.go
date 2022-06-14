@@ -48,6 +48,7 @@ func (c *Compiler) parseQuery(stmt ast.Node, src string, o opts.Parser) (*Query,
 	}
 	var table *ast.TableName
 	switch n := raw.Stmt.(type) {
+	case *ast.CallStmt:
 	case *ast.SelectStmt:
 	case *ast.DeleteStmt:
 	case *ast.InsertStmt:
@@ -106,6 +107,7 @@ func (c *Compiler) parseQuery(stmt ast.Node, src string, o opts.Parser) (*Query,
 	if err != nil {
 		return nil, err
 	}
+
 	params, err := c.resolveCatalogRefs(qc, rvs, refs, namedParams)
 	if err != nil {
 		return nil, err

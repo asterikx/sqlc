@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/asterikx/sqlc/internal/metadata"
-	"github.com/asterikx/sqlc/internal/sql/ast"
+	"github.com/asterikx/sqlc/internal/plugin"
 )
 
 type QueryValue struct {
@@ -161,7 +161,7 @@ type Query struct {
 	Ret          QueryValue
 	Arg          QueryValue
 	// Used for :copyfrom
-	Table *ast.TableName
+	Table *plugin.Identifier
 }
 
 func (q Query) hasRetType() bool {

@@ -12,14 +12,16 @@ import (
 	"strings"
 
 	"github.com/asterikx/sqlc/internal/codegen/golang"
+	"github.com/asterikx/sqlc/internal/codegen/json"
 	"github.com/asterikx/sqlc/internal/codegen/kotlin"
 	"github.com/asterikx/sqlc/internal/codegen/python"
 	"github.com/asterikx/sqlc/internal/compiler"
 	"github.com/asterikx/sqlc/internal/config"
 	"github.com/asterikx/sqlc/internal/debug"
+	"github.com/asterikx/sqlc/internal/ext"
+	"github.com/asterikx/sqlc/internal/ext/process"
 	"github.com/asterikx/sqlc/internal/multierr"
 	"github.com/asterikx/sqlc/internal/opts"
-	"github.com/asterikx/sqlc/internal/plugin"
 )
 
 const errMessageNoVersion = `The configuration file must have a version number.
@@ -43,11 +45,13 @@ func printFileErr(stderr io.Writer, dir string, fileErr *multierr.FileError) {
 }
 
 type outPair struct {
-	Gen config.SQLGen
+	Gen    config.SQLGen
+	Plugin *config.Codegen
+
 	config.SQL
 }
 
-func Generate(ctx context.Context, e Env, dir, filename string, stderr io.Writer) (map[string]string, error) {
+func readConfig(stderr io.Writer, dir, filename string) (string, *config.Config, error) {
 	configPath := ""
 	if filename != "" {
 		configPath = filepath.Join(dir, filename)
@@ -65,12 +69,12 @@ func Generate(ctx context.Context, e Env, dir, filename string, stderr io.Writer
 
 		if yamlMissing && jsonMissing {
 			fmt.Fprintln(stderr, "error parsing configuration files. sqlc.yaml or sqlc.json: file does not exist")
-			return nil, errors.New("config file missing")
+			return "", nil, errors.New("config file missing")
 		}
 
 		if !yamlMissing && !jsonMissing {
 			fmt.Fprintln(stderr, "error: both sqlc.json and sqlc.yaml files present")
-			return nil, errors.New("sqlc.json and sqlc.yaml present")
+			return "", nil, errors.New("sqlc.json and sqlc.yaml present")
 		}
 
 		configPath = yamlPath
@@ -83,7 +87,7 @@ func Generate(ctx context.Context, e Env, dir, filename string, stderr io.Writer
 	blob, err := os.ReadFile(configPath)
 	if err != nil {
 		fmt.Fprintf(stderr, "error parsing %s: file does not exist\n", base)
-		return nil, err
+		return "", nil, err
 	}
 
 	conf, err := config.ParseConfig(bytes.NewReader(blob))
@@ -97,9 +101,19 @@ func Generate(ctx context.Context, e Env, dir, filename string, stderr io.Writer
 			fmt.Fprintf(stderr, errMessageNoPackages)
 		}
 		fmt.Fprintf(stderr, "error parsing %s: %s\n", base, err)
+		return "", nil, err
+	}
+
+	return configPath, &conf, nil
+}
+
+func Generate(ctx context.Context, e Env, dir, filename string, stderr io.Writer) (map[string]string, error) {
+	configPath, conf, err := readConfig(stderr, dir, filename)
+	if err != nil {
 		return nil, err
 	}
 
+	base := filepath.Base(configPath)
 	if err := config.Validate(conf); err != nil {
 		fmt.Fprintf(stderr, "error validating %s: %s\n", base, err)
 		return nil, err
@@ -123,19 +137,30 @@ func Generate(ctx context.Context, e Env, dir, filename string, stderr io.Writer
 			})
 		}
 		if sql.Gen.Python != nil {
-			if !e.ExperimentalFeatures {
-				fmt.Fprintf(stderr, "error parsing %s: unknown target langauge \"python\"\n", base)
-				return nil, fmt.Errorf("unknown target language \"python\"")
-			}
 			pairs = append(pairs, outPair{
 				SQL: sql,
 				Gen: config.SQLGen{Python: sql.Gen.Python},
 			})
 		}
+		if sql.Gen.JSON != nil {
+			pairs = append(pairs, outPair{
+				SQL: sql,
+				Gen: config.SQLGen{JSON: sql.Gen.JSON},
+			})
+		}
+		for i, _ := range sql.Codegen {
+			pairs = append(pairs, outPair{
+				SQL:    sql,
+				Plugin: &sql.Codegen[i],
+			})
+		}
 	}
 
 	for _, sql := range pairs {
-		combo := config.Combine(conf, sql.SQL)
+		combo := config.Combine(*conf, sql.SQL)
+		if sql.Plugin != nil {
+			combo.Codegen = *sql.Plugin
+		}
 
 		// TODO: This feels like a hack that will bite us later
 		joined := make([]string, 0, len(sql.Schema))
@@ -154,24 +179,32 @@ func Generate(ctx context.Context, e Env, dir, filename string, stderr io.Writer
 		parseOpts := opts.Parser{
 			Debug: debug.Debug,
 		}
-		if sql.Gen.Go != nil {
+
+		switch {
+		case sql.Gen.Go != nil:
 			name = combo.Go.Package
 			lang = "golang"
-		} else if sql.Gen.Kotlin != nil {
+
+		case sql.Gen.Kotlin != nil:
 			if sql.Engine == config.EnginePostgreSQL {
 				parseOpts.UsePositionalParameters = true
 			}
 			lang = "kotlin"
 			name = combo.Kotlin.Package
-		} else if sql.Gen.Python != nil {
+
+		case sql.Gen.Python != nil:
 			lang = "python"
 			name = combo.Python.Package
+
+		case sql.Plugin != nil:
+			lang = fmt.Sprintf("process:%s", sql.Plugin.Plugin)
+			name = sql.Plugin.Plugin
 		}
 
 		var packageRegion *trace.Region
 		if debug.Traced {
 			packageRegion = trace.StartRegion(ctx, "package")
-			trace.Logf(ctx, "", "name=%s dir=%s language=%s", name, dir, lang)
+			trace.Logf(ctx, "", "name=%s dir=%s plugin=%s", name, dir, lang)
 		}
 
 		result, failed := parse(ctx, e, name, dir, sql.SQL, combo, parseOpts, stderr)
@@ -187,33 +220,39 @@ func Generate(ctx context.Context, e Env, dir, filename string, stderr io.Writer
 		if debug.Traced {
 			region = trace.StartRegion(ctx, "codegen")
 		}
-		var files map[string]string
-		var resp *plugin.CodeGenResponse
+		var handler ext.Handler
 		var out string
 		switch {
 		case sql.Gen.Go != nil:
 			out = combo.Go.Out
-			files, err = golang.Generate(result, combo)
+			handler = ext.HandleFunc(golang.Generate)
+
 		case sql.Gen.Kotlin != nil:
 			out = combo.Kotlin.Out
-			resp, err = kotlin.Generate(codeGenRequest(result, combo))
+			handler = ext.HandleFunc(kotlin.Generate)
+
 		case sql.Gen.Python != nil:
 			out = combo.Python.Out
-			resp, err = python.Generate(codeGenRequest(result, combo))
+			handler = ext.HandleFunc(python.Generate)
+
+		case sql.Gen.JSON != nil:
+			out = combo.JSON.Out
+			handler = ext.HandleFunc(json.Generate)
+
+		case sql.Plugin != nil:
+			out = sql.Plugin.Out
+			handler = &process.Runner{
+				Config: combo.Global,
+				Plugin: sql.Plugin.Plugin,
+			}
+
 		default:
 			panic("missing language backend")
 		}
+		resp, err := handler.Generate(codeGenRequest(result, combo))
 		if region != nil {
 			region.End()
 		}
-
-		if resp != nil {
-			files = map[string]string{}
-			for _, file := range resp.Files {
-				files[file.Name] = string(file.Contents)
-			}
-		}
-
 		if err != nil {
 			fmt.Fprintf(stderr, "# package %s\n", name)
 			fmt.Fprintf(stderr, "error generating code: %s\n", err)
@@ -222,6 +261,10 @@ func Generate(ctx context.Context, e Env, dir, filename string, stderr io.Writer
 				packageRegion.End()
 			}
 			continue
+		}
+		files := map[string]string{}
+		for _, file := range resp.Files {
+			files[file.Name] = string(file.Contents)
 		}
 		for n, source := range files {
 			filename := filepath.Join(dir, out, n)
