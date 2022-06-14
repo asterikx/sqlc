@@ -3,20 +3,13 @@ package kotlin
 import (
 	"log"
 
+	"github.com/asterikx/sqlc/internal/codegen/sdk"
 	"github.com/asterikx/sqlc/internal/debug"
 	"github.com/asterikx/sqlc/internal/plugin"
 )
 
-func dataType(n *plugin.Identifier) string {
-	if n.Schema != "" {
-		return n.Schema + "." + n.Name
-	} else {
-		return n.Name
-	}
-}
-
 func mysqlType(req *plugin.CodeGenRequest, col *plugin.Column) (string, bool) {
-	columnType := dataType(col.Type)
+	columnType := sdk.DataType(col.Type)
 
 	switch columnType {
 

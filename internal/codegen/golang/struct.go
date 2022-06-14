@@ -2,19 +2,20 @@ package golang
 
 import (
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
-	"github.com/asterikx/sqlc/internal/config"
-	"github.com/asterikx/sqlc/internal/core"
+	"github.com/asterikx/sqlc/internal/plugin"
 )
 
 type Struct struct {
-	Table   core.FQN
+	Table   plugin.Identifier
 	Name    string
 	Fields  []Field
 	Comment string
 }
 
-func StructName(name string, settings config.CombinedSettings) string {
+func StructName(name string, settings *plugin.Settings) string {
 	if rename := settings.Rename[name]; rename != "" {
 		return rename
 	}
@@ -26,5 +27,12 @@ func StructName(name string, settings config.CombinedSettings) string {
 			out += strings.Title(p)
 		}
 	}
-	return out
+
+	// If a name has a digit as its first char, prepand an underscore to make it a valid Go name.
+	r, _ := utf8.DecodeRuneInString(out)
+	if unicode.IsDigit(r) {
+		return "_" + out
+	} else {
+		return out
+	}
 }

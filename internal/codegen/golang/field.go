@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/asterikx/sqlc/internal/config"
+	"github.com/asterikx/sqlc/internal/plugin"
 )
 
 type Field struct {
@@ -19,7 +19,7 @@ type Field struct {
 func (gf Field) Tag() string {
 	tags := make([]string, 0, len(gf.Tags))
 	for key, val := range gf.Tags {
-		tags = append(tags, fmt.Sprintf("%s\"%s\"", key, val))
+		tags = append(tags, fmt.Sprintf("%s:\"%s\"", key, val))
 	}
 	if len(tags) == 0 {
 		return ""
@@ -28,8 +28,8 @@ func (gf Field) Tag() string {
 	return strings.Join(tags, " ")
 }
 
-func JSONTagName(name string, settings config.CombinedSettings) string {
-	style := settings.Go.JSONTagsCaseStyle
+func JSONTagName(name string, settings *plugin.Settings) string {
+	style := settings.Go.JsonTagsCaseStyle
 	if style == "" || style == "none" {
 		return name
 	} else {

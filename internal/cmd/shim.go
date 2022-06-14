@@ -5,6 +5,8 @@ import (
 
 	"github.com/asterikx/sqlc/internal/compiler"
 	"github.com/asterikx/sqlc/internal/config"
+	"github.com/asterikx/sqlc/internal/config/convert"
+	"github.com/asterikx/sqlc/internal/info"
 	"github.com/asterikx/sqlc/internal/plugin"
 	"github.com/asterikx/sqlc/internal/sql/catalog"
 )
@@ -39,6 +41,7 @@ func pluginOverride(o config.Override) *plugin.Override {
 		ColumnName: column,
 		Table:      &table,
 		PythonType: pluginPythonType(o.PythonType),
+		GoType:     pluginGoType(o),
 	}
 }
 
@@ -54,8 +57,23 @@ func pluginSettings(cs config.CombinedSettings) *plugin.Settings {
 		Queries:   []string(cs.Package.Queries),
 		Overrides: over,
 		Rename:    cs.Rename,
+		Codegen:   pluginCodegen(cs.Codegen),
 		Python:    pluginPythonCode(cs.Python),
 		Kotlin:    pluginKotlinCode(cs.Kotlin),
+		Go:        pluginGoCode(cs.Go),
+		Json:      pluginJSONCode(cs.JSON),
+	}
+}
+
+func pluginCodegen(s config.Codegen) *plugin.Codegen {
+	opts, err := convert.YAMLtoJSON(s.Options)
+	if err != nil {
+		panic(err)
+	}
+	return &plugin.Codegen{
+		Out:     s.Out,
+		Plugin:  s.Plugin,
+		Options: opts,
 	}
 }
 
@@ -66,6 +84,46 @@ func pluginPythonCode(s config.SQLPython) *plugin.PythonCode {
 		EmitExactTableNames: s.EmitExactTableNames,
 		EmitSyncQuerier:     s.EmitSyncQuerier,
 		EmitAsyncQuerier:    s.EmitAsyncQuerier,
+		EmitPydanticModels:  s.EmitPydanticModels,
+	}
+}
+
+func pluginGoCode(s config.SQLGo) *plugin.GoCode {
+	return &plugin.GoCode{
+		EmitInterface:             s.EmitInterface,
+		EmitJsonTags:              s.EmitJSONTags,
+		EmitDbTags:                s.EmitDBTags,
+		EmitPreparedQueries:       s.EmitPreparedQueries,
+		EmitExactTableNames:       s.EmitExactTableNames,
+		EmitEmptySlices:           s.EmitEmptySlices,
+		EmitExportedQueries:       s.EmitExportedQueries,
+		EmitResultStructPointers:  s.EmitResultStructPointers,
+		EmitParamsStructPointers:  s.EmitParamsStructPointers,
+		EmitMethodsWithDbArgument: s.EmitMethodsWithDBArgument,
+		EmitEnumValidMethod:       s.EmitEnumValidMethod,
+		EmitAllEnumValues:         s.EmitAllEnumValues,
+		JsonTagsCaseStyle:         s.JSONTagsCaseStyle,
+		Package:                   s.Package,
+		Out:                       s.Out,
+		SqlPackage:                s.SQLPackage,
+		OutputDbFileName:          s.OutputDBFileName,
+		OutputModelsFileName:      s.OutputModelsFileName,
+		OutputQuerierFileName:     s.OutputQuerierFileName,
+		OutputFilesSuffix:         s.OutputFilesSuffix,
+	}
+}
+
+func pluginGoType(o config.Override) *plugin.ParsedGoType {
+	// Note that there is a slight mismatch between this and the
+	// proto api. The GoType on the override is the unparsed type,
+	// which could be a qualified path or an object, as per
+	// https://docs.sqlc.dev/en/latest/reference/config.html#renaming-struct-fields
+	return &plugin.ParsedGoType{
+		ImportPath: o.GoImportPath,
+		Package:    o.GoPackage,
+		TypeName:   o.GoTypeName,
+		BasicType:  o.GoBasicType,
+		StructTags: o.GoStructTags,
 	}
 }
 
@@ -84,20 +142,33 @@ func pluginKotlinCode(s config.SQLKotlin) *plugin.KotlinCode {
 	}
 }
 
+func pluginJSONCode(s config.SQLJSON) *plugin.JSONCode {
+	return &plugin.JSONCode{
+		Out:      s.Out,
+		Indent:   s.Indent,
+		Filename: s.Filename,
+	}
+}
+
 func pluginCatalog(c *catalog.Catalog) *plugin.Catalog {
 	var schemas []*plugin.Schema
 	for _, s := range c.Schemas {
 		var enums []*plugin.Enum
+		var cts []*plugin.CompositeType
 		for _, typ := range s.Types {
-			enum, ok := typ.(*catalog.Enum)
-			if !ok {
-				continue
+			switch typ := typ.(type) {
+			case *catalog.Enum:
+				enums = append(enums, &plugin.Enum{
+					Name:    typ.Name,
+					Comment: typ.Comment,
+					Vals:    typ.Vals,
+				})
+			case *catalog.CompositeType:
+				cts = append(cts, &plugin.CompositeType{
+					Name:    typ.Name,
+					Comment: typ.Comment,
+				})
 			}
-			enums = append(enums, &plugin.Enum{
-				Name:    enum.Name,
-				Comment: enum.Comment,
-				Vals:    enum.Vals,
-			})
 		}
 		var tables []*plugin.Table
 		for _, t := range s.Tables {
@@ -136,10 +207,11 @@ func pluginCatalog(c *catalog.Catalog) *plugin.Catalog {
 			})
 		}
 		schemas = append(schemas, &plugin.Schema{
-			Comment: s.Comment,
-			Name:    s.Name,
-			Tables:  tables,
-			Enums:   enums,
+			Comment:        s.Comment,
+			Name:           s.Name,
+			Tables:         tables,
+			Enums:          enums,
+			CompositeTypes: cts,
 		})
 	}
 	return &plugin.Catalog{
@@ -161,14 +233,23 @@ func pluginQueries(r *compiler.Result) []*plugin.Query {
 		for _, p := range q.Params {
 			params = append(params, pluginQueryParam(p))
 		}
+		var iit *plugin.Identifier
+		if q.InsertIntoTable != nil {
+			iit = &plugin.Identifier{
+				Catalog: q.InsertIntoTable.Catalog,
+				Schema:  q.InsertIntoTable.Schema,
+				Name:    q.InsertIntoTable.Name,
+			}
+		}
 		out = append(out, &plugin.Query{
-			Name:     q.Name,
-			Cmd:      q.Cmd,
-			Text:     q.SQL,
-			Comments: q.Comments,
-			Columns:  columns,
-			Params:   params,
-			Filename: q.Filename,
+			Name:            q.Name,
+			Cmd:             q.Cmd,
+			Text:            q.SQL,
+			Comments:        q.Comments,
+			Columns:         columns,
+			Params:          params,
+			Filename:        q.Filename,
+			InsertIntoTable: iit,
 		})
 	}
 	return out
@@ -180,11 +261,13 @@ func pluginQueryColumn(c *compiler.Column) *plugin.Column {
 		l = *c.Length
 	}
 	out := &plugin.Column{
-		Name:    c.Name,
-		Comment: c.Comment,
-		NotNull: c.NotNull,
-		IsArray: c.IsArray,
-		Length:  int32(l),
+		Name:         c.Name,
+		Comment:      c.Comment,
+		NotNull:      c.NotNull,
+		IsArray:      c.IsArray,
+		Length:       int32(l),
+		IsNamedParam: c.IsNamedParam,
+		IsFuncCall:   c.IsFuncCall,
 	}
 
 	if c.Type != nil {
@@ -219,8 +302,9 @@ func pluginQueryParam(p compiler.Parameter) *plugin.Parameter {
 
 func codeGenRequest(r *compiler.Result, settings config.CombinedSettings) *plugin.CodeGenRequest {
 	return &plugin.CodeGenRequest{
-		Settings: pluginSettings(settings),
-		Catalog:  pluginCatalog(r.Catalog),
-		Queries:  pluginQueries(r),
+		Settings:    pluginSettings(settings),
+		Catalog:     pluginCatalog(r.Catalog),
+		Queries:     pluginQueries(r),
+		SqlcVersion: info.Version,
 	}
 }

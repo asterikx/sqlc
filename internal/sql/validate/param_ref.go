@@ -3,6 +3,7 @@ package validate
 import (
 	"errors"
 	"fmt"
+
 	"github.com/asterikx/sqlc/internal/sql/ast"
 	"github.com/asterikx/sqlc/internal/sql/astutils"
 	"github.com/asterikx/sqlc/internal/sql/sqlerr"
