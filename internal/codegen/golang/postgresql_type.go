@@ -34,8 +34,11 @@ func parseIdentifierString(name string) (*plugin.Identifier, error) {
 }
 
 func postgresType(req *plugin.CodeGenRequest, col *plugin.Column) string {
+	if col.IsArray {
+		col.NotNull = false
+	}
 	columnType := sdk.DataType(col.Type)
-	notNull := col.NotNull || col.IsArray
+	notNull := col.NotNull
 	driver := parseDriver(req.Settings)
 
 	switch columnType {
