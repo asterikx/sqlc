@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pingcap/parser"
-	_ "github.com/pingcap/parser/test_driver"
+	"github.com/pingcap/tidb/parser"
+	_ "github.com/pingcap/tidb/parser/test_driver"
 
 	"github.com/asterikx/sqlc/internal/metadata"
 	"github.com/asterikx/sqlc/internal/sql/ast"

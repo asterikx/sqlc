@@ -1,21 +1,16 @@
 Database and language support
 #############################
 
-========  ============  ============
-Language  MySQL         PostgreSQL
-========  ============  ============
-Go        Stable        Stable
-Kotlin    Beta          Beta
-Python    Beta          Beta
-========  ============  ============
+========  ============  ============  ===============
+Language  MySQL         PostgreSQL    SQLite
+========  ============  ============  ===============
+Go        Stable        Stable        Beta
+Kotlin    Beta          Beta          Not implemented
+Python    Beta          Beta          Not implemented
+========  ============  ============  ===============
 
 Future Language Support
 ************************
 
-- `C# <https://github.com/asterikx/sqlc/issues/373>`_
-- `TypeScript <https://github.com/asterikx/sqlc/issues/296>`_
-
-Future Database Support
-************************
-
-- `SQLite <https://github.com/asterikx/sqlc/issues/161>`_
+- `C# <https://github.com/kyleconroy/sqlc/issues/373>`_
+- `TypeScript <https://github.com/kyleconroy/sqlc/issues/296>`_
