@@ -13,19 +13,20 @@ import (
 
 	"github.com/asterikx/sqlc/internal/codegen/golang"
 	"github.com/asterikx/sqlc/internal/codegen/json"
-	"github.com/asterikx/sqlc/internal/codegen/kotlin"
-	"github.com/asterikx/sqlc/internal/codegen/python"
 	"github.com/asterikx/sqlc/internal/compiler"
 	"github.com/asterikx/sqlc/internal/config"
+	"github.com/asterikx/sqlc/internal/config/convert"
 	"github.com/asterikx/sqlc/internal/debug"
 	"github.com/asterikx/sqlc/internal/ext"
 	"github.com/asterikx/sqlc/internal/ext/process"
+	"github.com/asterikx/sqlc/internal/ext/wasm"
 	"github.com/asterikx/sqlc/internal/multierr"
 	"github.com/asterikx/sqlc/internal/opts"
+	"github.com/asterikx/sqlc/internal/plugin"
 )
 
 const errMessageNoVersion = `The configuration file must have a version number.
-Set the version to 1 at the top of sqlc.json:
+Set the version to 1 or 2 at the top of sqlc.json:
 
 {
   "version": "1"
@@ -34,7 +35,7 @@ Set the version to 1 at the top of sqlc.json:
 `
 
 const errMessageUnknownVersion = `The configuration file has an invalid version number.
-The only supported version is "1".
+The supported version can only be "1" or "2".
 `
 
 const errMessageNoPackages = `No packages are configured`
@@ -49,6 +50,15 @@ type outPair struct {
 	Plugin *config.Codegen
 
 	config.SQL
+}
+
+func findPlugin(conf config.Config, name string) (*config.Plugin, error) {
+	for _, plug := range conf.Plugins {
+		if plug.Name == name {
+			return &plug, nil
+		}
+	}
+	return nil, fmt.Errorf("plugin not found")
 }
 
 func readConfig(stderr io.Writer, dir, filename string) (string, *config.Config, error) {
@@ -130,18 +140,6 @@ func Generate(ctx context.Context, e Env, dir, filename string, stderr io.Writer
 				Gen: config.SQLGen{Go: sql.Gen.Go},
 			})
 		}
-		if sql.Gen.Kotlin != nil {
-			pairs = append(pairs, outPair{
-				SQL: sql,
-				Gen: config.SQLGen{Kotlin: sql.Gen.Kotlin},
-			})
-		}
-		if sql.Gen.Python != nil {
-			pairs = append(pairs, outPair{
-				SQL: sql,
-				Gen: config.SQLGen{Python: sql.Gen.Python},
-			})
-		}
 		if sql.Gen.JSON != nil {
 			pairs = append(pairs, outPair{
 				SQL: sql,
@@ -185,17 +183,6 @@ func Generate(ctx context.Context, e Env, dir, filename string, stderr io.Writer
 			name = combo.Go.Package
 			lang = "golang"
 
-		case sql.Gen.Kotlin != nil:
-			if sql.Engine == config.EnginePostgreSQL {
-				parseOpts.UsePositionalParameters = true
-			}
-			lang = "kotlin"
-			name = combo.Kotlin.Package
-
-		case sql.Gen.Python != nil:
-			lang = "python"
-			name = combo.Python.Package
-
 		case sql.Plugin != nil:
 			lang = fmt.Sprintf("process:%s", sql.Plugin.Plugin)
 			name = sql.Plugin.Plugin
@@ -216,43 +203,7 @@ func Generate(ctx context.Context, e Env, dir, filename string, stderr io.Writer
 			break
 		}
 
-		var region *trace.Region
-		if debug.Traced {
-			region = trace.StartRegion(ctx, "codegen")
-		}
-		var handler ext.Handler
-		var out string
-		switch {
-		case sql.Gen.Go != nil:
-			out = combo.Go.Out
-			handler = ext.HandleFunc(golang.Generate)
-
-		case sql.Gen.Kotlin != nil:
-			out = combo.Kotlin.Out
-			handler = ext.HandleFunc(kotlin.Generate)
-
-		case sql.Gen.Python != nil:
-			out = combo.Python.Out
-			handler = ext.HandleFunc(python.Generate)
-
-		case sql.Gen.JSON != nil:
-			out = combo.JSON.Out
-			handler = ext.HandleFunc(json.Generate)
-
-		case sql.Plugin != nil:
-			out = sql.Plugin.Out
-			handler = &process.Runner{
-				Config: combo.Global,
-				Plugin: sql.Plugin.Plugin,
-			}
-
-		default:
-			panic("missing language backend")
-		}
-		resp, err := handler.Generate(codeGenRequest(result, combo))
-		if region != nil {
-			region.End()
-		}
+		out, resp, err := codegen(ctx, combo, sql, result)
 		if err != nil {
 			fmt.Fprintf(stderr, "# package %s\n", name)
 			fmt.Fprintf(stderr, "error generating code: %s\n", err)
@@ -262,6 +213,7 @@ func Generate(ctx context.Context, e Env, dir, filename string, stderr io.Writer
 			}
 			continue
 		}
+
 		files := map[string]string{}
 		for _, file := range resp.Files {
 			files[file.Name] = string(file.Contents)
@@ -312,4 +264,58 @@ func parse(ctx context.Context, e Env, name, dir string, sql config.SQL, combo c
 		return nil, true
 	}
 	return c.Result(), false
+}
+
+func codegen(ctx context.Context, combo config.CombinedSettings, sql outPair, result *compiler.Result) (string, *plugin.CodeGenResponse, error) {
+	var region *trace.Region
+	if debug.Traced {
+		region = trace.StartRegion(ctx, "codegen")
+	}
+	req := codeGenRequest(result, combo)
+	var handler ext.Handler
+	var out string
+	switch {
+	case sql.Gen.Go != nil:
+		out = combo.Go.Out
+		handler = ext.HandleFunc(golang.Generate)
+
+	case sql.Gen.JSON != nil:
+		out = combo.JSON.Out
+		handler = ext.HandleFunc(json.Generate)
+
+	case sql.Plugin != nil:
+		out = sql.Plugin.Out
+		plug, err := findPlugin(combo.Global, sql.Plugin.Plugin)
+		if err != nil {
+			return "", nil, fmt.Errorf("plugin not found: %s", err)
+		}
+
+		switch {
+		case plug.Process != nil:
+			handler = &process.Runner{
+				Cmd: plug.Process.Cmd,
+			}
+		case plug.WASM != nil:
+			handler = &wasm.Runner{
+				URL:    plug.WASM.URL,
+				SHA256: plug.WASM.SHA256,
+			}
+		default:
+			return "", nil, fmt.Errorf("unsupported plugin type")
+		}
+
+		opts, err := convert.YAMLtoJSON(sql.Plugin.Options)
+		if err != nil {
+			return "", nil, fmt.Errorf("invalid plugin options")
+		}
+		req.PluginOptions = opts
+
+	default:
+		return "", nil, fmt.Errorf("missing language backend")
+	}
+	resp, err := handler.Generate(ctx, req)
+	if region != nil {
+		region.End()
+	}
+	return out, resp, err
 }
