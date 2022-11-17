@@ -40,11 +40,15 @@ func postgresType(req *plugin.CodeGenRequest, col *plugin.Column) string {
 	columnType := sdk.DataType(col.Type)
 	notNull := col.NotNull
 	driver := parseDriver(req.Settings)
+	emitPointersForNull := driver == SQLDriverPGXV4 && req.Settings.Go.EmitPointersForNullTypes
 
 	switch columnType {
 	case "serial", "serial4", "pg_catalog.serial4":
 		if notNull {
 			return "int32"
+		}
+		if emitPointersForNull {
+			return "*int32"
 		}
 		return "sql.NullInt32"
 
@@ -52,11 +56,17 @@ func postgresType(req *plugin.CodeGenRequest, col *plugin.Column) string {
 		if notNull {
 			return "int64"
 		}
+		if emitPointersForNull {
+			return "*int64"
+		}
 		return "sql.NullInt64"
 
 	case "smallserial", "serial2", "pg_catalog.serial2":
 		if notNull {
 			return "int16"
+		}
+		if emitPointersForNull {
+			return "*int16"
 		}
 		return "sql.NullInt16"
 
@@ -64,11 +74,17 @@ func postgresType(req *plugin.CodeGenRequest, col *plugin.Column) string {
 		if notNull {
 			return "int32"
 		}
+		if emitPointersForNull {
+			return "*int32"
+		}
 		return "sql.NullInt32"
 
 	case "bigint", "int8", "pg_catalog.int8":
 		if notNull {
 			return "int64"
+		}
+		if emitPointersForNull {
+			return "*int64"
 		}
 		return "sql.NullInt64"
 
@@ -76,17 +92,26 @@ func postgresType(req *plugin.CodeGenRequest, col *plugin.Column) string {
 		if notNull {
 			return "int16"
 		}
+		if emitPointersForNull {
+			return "*int16"
+		}
 		return "sql.NullInt16"
 
 	case "float", "double precision", "float8", "pg_catalog.float8":
 		if notNull {
 			return "float64"
 		}
+		if emitPointersForNull {
+			return "*float64"
+		}
 		return "sql.NullFloat64"
 
 	case "real", "float4", "pg_catalog.float4":
 		if notNull {
 			return "float32"
+		}
+		if emitPointersForNull {
+			return "*float32"
 		}
 		return "sql.NullFloat64" // TODO: Change to sql.NullFloat32 after updating the go.mod file
 
@@ -101,11 +126,17 @@ func postgresType(req *plugin.CodeGenRequest, col *plugin.Column) string {
 		if notNull {
 			return "string"
 		}
+		if emitPointersForNull {
+			return "*string"
+		}
 		return "sql.NullString"
 
 	case "boolean", "bool", "pg_catalog.bool":
 		if notNull {
 			return "bool"
+		}
+		if emitPointersForNull {
+			return "*bool"
 		}
 		return "sql.NullBool"
 
@@ -144,11 +175,17 @@ func postgresType(req *plugin.CodeGenRequest, col *plugin.Column) string {
 		if notNull {
 			return "time.Time"
 		}
+		if emitPointersForNull {
+			return "*time.Time"
+		}
 		return "sql.NullTime"
 
 	case "pg_catalog.time", "pg_catalog.timetz":
 		if notNull {
 			return "time.Time"
+		}
+		if emitPointersForNull {
+			return "*time.Time"
 		}
 		return "sql.NullTime"
 
@@ -156,17 +193,26 @@ func postgresType(req *plugin.CodeGenRequest, col *plugin.Column) string {
 		if notNull {
 			return "time.Time"
 		}
+		if emitPointersForNull {
+			return "*time.Time"
+		}
 		return "sql.NullTime"
 
 	case "text", "pg_catalog.varchar", "pg_catalog.bpchar", "string":
 		if notNull {
 			return "string"
 		}
+		if emitPointersForNull {
+			return "*string"
+		}
 		return "sql.NullString"
 
 	case "uuid":
 		if notNull {
 			return "uuid.UUID"
+		}
+		if emitPointersForNull {
+			return "*uuid.UUID"
 		}
 		return "uuid.NullUUID"
 
@@ -209,11 +255,17 @@ func postgresType(req *plugin.CodeGenRequest, col *plugin.Column) string {
 		if notNull {
 			return "string"
 		}
+		if emitPointersForNull {
+			return "*string"
+		}
 		return "sql.NullString"
 
 	case "interval", "pg_catalog.interval":
 		if notNull {
 			return "int64"
+		}
+		if emitPointersForNull {
+			return "*int64"
 		}
 		return "sql.NullInt64"
 
@@ -277,7 +329,7 @@ func postgresType(req *plugin.CodeGenRequest, col *plugin.Column) string {
 		}
 
 		for _, schema := range req.Catalog.Schemas {
-			if schema.Name == "pg_catalog" {
+			if schema.Name == "pg_catalog" || schema.Name == "information_schema" {
 				continue
 			}
 
@@ -301,6 +353,9 @@ func postgresType(req *plugin.CodeGenRequest, col *plugin.Column) string {
 				if rel.Name == ct.Name && rel.Schema == schema.Name {
 					if notNull {
 						return "string"
+					}
+					if emitPointersForNull {
+						return "*string"
 					}
 					return "sql.NullString"
 				}

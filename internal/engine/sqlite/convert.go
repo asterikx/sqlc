@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/antlr/antlr4/runtime/Go/antlr"
-
 	"github.com/asterikx/sqlc/internal/debug"
 	"github.com/asterikx/sqlc/internal/engine/sqlite/parser"
 	"github.com/asterikx/sqlc/internal/sql/ast"

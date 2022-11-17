@@ -7,9 +7,8 @@ import (
 	"fmt"
 	"os/exec"
 
-	"google.golang.org/protobuf/proto"
-
 	"github.com/asterikx/sqlc/internal/plugin"
+	"google.golang.org/protobuf/proto"
 )
 
 type Runner struct {
