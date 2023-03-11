@@ -18,7 +18,7 @@ import (
 type tmplCtx struct {
 	Q           string
 	Package     string
-	SQLPackage  SQLPackage
+	SQLDriver   SQLDriver
 	Enums       []Enum
 	Structs     []Struct
 	GoQueries   []Query
@@ -91,29 +91,32 @@ func generate(req *plugin.CodeGenRequest, enums []Enum, structs []Struct, querie
 		EmitAllEnumValues:         golang.EmitAllEnumValues,
 		UsesCopyFrom:              usesCopyFrom(queries),
 		UsesBatch:                 usesBatch(queries),
-		SQLPackage:                SQLPackageFromString(golang.SqlPackage),
+		SQLDriver:                 parseDriver(golang.SqlPackage),
 		Q:                         "`",
 		Package:                   golang.Package,
-		GoQueries:                 queries,
 		Enums:                     enums,
 		Structs:                   structs,
 		SqlcVersion:               req.SqlcVersion,
 	}
 
-	if tctx.UsesCopyFrom && tctx.SQLPackage != SQLPackagePGX {
+	if tctx.UsesCopyFrom && !tctx.SQLDriver.IsPGX() {
 		return nil, errors.New(":copyfrom is only supported by pgx")
 	}
 
-	if tctx.UsesBatch && tctx.SQLPackage != SQLPackagePGX {
+	if tctx.UsesBatch && !tctx.SQLDriver.IsPGX() {
 		return nil, errors.New(":batch* commands are only supported by pgx")
 	}
 
 	output := map[string]string{}
 
 	execute := func(name, templateName string) error {
+		imports := i.Imports(name)
+		replacedQueries := replaceConflictedArg(imports, queries)
+
 		var b bytes.Buffer
 		w := bufio.NewWriter(&b)
 		tctx.SourceName = name
+		tctx.GoQueries = replacedQueries
 		err := tmpl.ExecuteTemplate(w, templateName, &tctx)
 		w.Flush()
 		if err != nil {

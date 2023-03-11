@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
+	osexec "os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -92,14 +94,38 @@ func TestReplay(t *testing.T) {
 		tc := replay
 		t.Run(tc, func(t *testing.T) {
 			t.Parallel()
-			path, _ := filepath.Abs(tc)
+
 			var stderr bytes.Buffer
+			var output map[string]string
+			var err error
+
+			path, _ := filepath.Abs(tc)
+			args := parseExec(t, path)
 			expected := expectedStderr(t, path)
-			output, err := cmd.Generate(ctx, cmd.Env{ExperimentalFeatures: true}, path, "", &stderr)
-			if len(expected) == 0 && err != nil {
-				t.Fatalf("sqlc generate failed: %s", stderr.String())
+
+			if args.Process != "" {
+				_, err := osexec.LookPath(args.Process)
+				if err != nil {
+					t.Skipf("executable not found: %s %s", args.Process, err)
+				}
 			}
-			cmpDirectory(t, path, output)
+
+			switch args.Command {
+			case "diff":
+				err = cmd.Diff(ctx, cmd.Env{ExperimentalFeatures: true}, path, "", &stderr)
+			case "generate":
+				output, err = cmd.Generate(ctx, cmd.Env{ExperimentalFeatures: true}, path, "", &stderr)
+				if err == nil {
+					cmpDirectory(t, path, output)
+				}
+			default:
+				t.Fatalf("unknown command")
+			}
+
+			if len(expected) == 0 && err != nil {
+				t.Fatalf("sqlc %s failed: %s", args.Command, stderr.String())
+			}
+
 			if diff := cmp.Diff(expected, stderr.String()); diff != "" {
 				t.Errorf("stderr differed (-want +got):\n%s", diff)
 			}
@@ -124,6 +150,9 @@ func cmpDirectory(t *testing.T, dir string, actual map[string]string) {
 			return nil
 		}
 		if filepath.Base(path) == "sqlc.json" {
+			return nil
+		}
+		if filepath.Base(path) == "exec.json" {
 			return nil
 		}
 		if strings.Contains(path, "/kotlin/build") {
@@ -177,6 +206,30 @@ func expectedStderr(t *testing.T, dir string) string {
 		return string(blob)
 	}
 	return ""
+}
+
+type exec struct {
+	Command string `json:"command"`
+	Process string `json:"process"`
+}
+
+func parseExec(t *testing.T, dir string) exec {
+	t.Helper()
+	var e exec
+	path := filepath.Join(dir, "exec.json")
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		blob, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(blob, &e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if e.Command == "" {
+		e.Command = "generate"
+	}
+	return e
 }
 
 func BenchmarkReplay(b *testing.B) {
