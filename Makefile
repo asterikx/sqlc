@@ -1,4 +1,4 @@
-.PHONY: build build-endtoend test test-ci test-examples test-endtoend regen start psql mysqlsh
+.PHONY: build build-endtoend test test-ci test-examples test-endtoend regen start psql mysqlsh proto
 
 build:
 	go build ./...
@@ -9,13 +9,16 @@ install:
 test:
 	go test ./...
 
+vet:
+	go vet ./...
+
 test-examples:
 	go test --tags=examples ./...
 
 build-endtoend:
 	cd ./internal/endtoend/testdata && go build ./...
 
-test-ci: test-examples build-endtoend
+test-ci: test-examples build-endtoend vet
 
 regen: sqlc-dev sqlc-gen-json
 	go run ./scripts/regenerate/
@@ -41,16 +44,5 @@ psql:
 mysqlsh:
 	mysqlsh --sql --user root --password mysecretpassword --database dinotest 127.0.0.1:3306
 
-# $ protoc --version
-# libprotoc 3.19.1
-# $ go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-# $ go install github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto
-proto: internal/plugin/codegen.pb.go
-
-internal/plugin/codegen.pb.go: protos/plugin/codegen.proto
-	protoc -I ./protos \
-		--go_out=. \
-		--go_opt=module=github.com/asterikx/sqlc \
-		--go-vtproto_out=. \
-		--go-vtproto_opt=module=github.com/asterikx/sqlc,features=marshal+unmarshal+size \
-		./protos/plugin/codegen.proto
+proto:
+	buf generate

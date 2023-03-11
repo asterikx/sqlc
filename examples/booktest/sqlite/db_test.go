@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kyleconroy/sqlc/internal/sqltest"
+	"github.com/asterikx/sqlc/internal/sqltest"
 )
 
 // TODO: Enum is not yet supported
